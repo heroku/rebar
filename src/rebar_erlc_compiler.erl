@@ -342,13 +342,12 @@ buildinfo_file(OutDir) ->
     filename:join(OutDir, ?BUILDINFO_FILE).
 
 init_buildinfo(Config, Erls) ->
-    KeepBuildInfo = rebar_config:get_list(Config, keep_build_info, true),
-    G = restore_buildinfo("ebin", KeepBuildInfo),
+    G = restore_buildinfo("ebin"),
     lists:foreach(
       fun(Erl) ->
               update_buildinfo(G, Erl, include_path(Erl, Config))
       end, Erls),
-    ok = store_buildinfo(G, "ebin", KeepBuildInfo),
+    ok = store_buildinfo(G, "ebin"),
     G.
 
 update_buildinfo(G, Source, IncludePath) ->
@@ -386,9 +385,7 @@ modify_buildinfo(G, Source, IncludePath) ->
             ok
     end.
 
-restore_buildinfo(_OutDir, _KeepBuildInfo = false) ->
-    digraph:new();
-restore_buildinfo(OutDir, _KeepBuildInfo = true) ->
+restore_buildinfo(OutDir) ->
     File = buildinfo_file(OutDir),
     G = digraph:new(),
     case file:read_file(File) of
@@ -427,10 +424,7 @@ restore_buildinfo(OutDir, Graph, Data) ->
               end, Es)
     end.
 
-
-store_buildinfo(_G, _OutDir, _KeepBuildInfo = false) ->
-    ok;
-store_buildinfo(G, OutDir, _KeepBuildInfo = true) ->
+store_buildinfo(G, OutDir) ->
     Vs = lists:map(
            fun(V) ->
                    digraph:vertex(G, V)
