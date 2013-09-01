@@ -393,26 +393,40 @@ restore_buildinfo(OutDir, _KeepBuildInfo = true) ->
     G = digraph:new(),
     case file:read_file(File) of
         {ok, Data} ->
-            case catch binary_to_term(Data) of
-                {'EXIT', _} ->
+            case catch zlib:uncompress(Data) of
+                {'EXIT', {data_error, _}} ->
+                    ?ERROR(
+                       "Failed (zlib:uncompress) to restore build info file."
+                       " Discard file.~n", []),
                     ok;
-                BuildInfo ->
-                    ok = check_buildinfo(OutDir, BuildInfo),
-                    #buildinfo{erlc_info=ErlcInfo} = BuildInfo,
-                    {Vs, Es} = ErlcInfo,
-                    lists:foreach(
-                      fun({V, LastUpdated}) ->
-                              digraph:add_vertex(G, V, LastUpdated)
-                      end, Vs),
-                    lists:foreach(
-                      fun({V1, V2}) ->
-                              digraph:add_edge(G, V1, V2)
-                      end, Es)
+                Decompressed ->
+                    restore_buildinfo(OutDir, G, Decompressed)
             end;
         _Err ->
             ok
     end,
     G.
+
+restore_buildinfo(OutDir, Graph, Data) ->
+    case catch binary_to_term(Data) of
+        {'EXIT', _} ->
+            ?ERROR("Failed (binary_to_term) to restore build info file."
+                   " Discard file.~n", []),
+            ok;
+        BuildInfo ->
+            ok = check_buildinfo(OutDir, BuildInfo),
+            #buildinfo{erlc_info=ErlcInfo} = BuildInfo,
+            {Vs, Es} = ErlcInfo,
+            lists:foreach(
+              fun({V, LastUpdated}) ->
+                      digraph:add_vertex(Graph, V, LastUpdated)
+              end, Vs),
+            lists:foreach(
+              fun({V1, V2}) ->
+                      digraph:add_edge(Graph, V1, V2)
+              end, Es)
+    end.
+
 
 store_buildinfo(_G, _OutDir, _KeepBuildInfo = false) ->
     ok;
@@ -430,7 +444,7 @@ store_buildinfo(G, OutDir, _KeepBuildInfo = true) ->
                      end, digraph:out_edges(G, V))
            end, Vs),
     File = buildinfo_file(OutDir),
-    Data = term_to_binary(#buildinfo{erlc_info={Vs, Es}}),
+    Data = zlib:compress(term_to_binary(#buildinfo{erlc_info={Vs, Es}})),
     file:write_file(File, Data).
 
 -spec expand_file_names([file:filename()],
