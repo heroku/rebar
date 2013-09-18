@@ -137,8 +137,9 @@ process_dir(Dir, ParentConfig, Command, DirSet) ->
             %% CWD to see if it's a fit -- if it is, use that set of modules
             %% to process this dir.
             {ok, AvailModuleSets} = application:get_env(rebar, modules),
-            ModuleSet = choose_module_set(AvailModuleSets, Dir),
-            skip_or_process_dir(ModuleSet, Config, CurrentCodePath,
+            {ModuleSetsList, File} = choose_module_set(AvailModuleSets, Dir),
+            ModuleSet = proplists:get_value(Command, ModuleSetsList),
+            skip_or_process_dir({ModuleSet, File}, Config, CurrentCodePath,
                                 Dir, Command, DirSet)
     end.
 
