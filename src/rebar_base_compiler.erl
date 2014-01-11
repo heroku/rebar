@@ -159,7 +159,8 @@ compile_queue(Pids, Targets) ->
                     Worker ! {compile, Source},
                     compile_queue(Pids, Rest)
             end;
-        {fail, [_, {source, Source}]=Error} ->
+
+        {fail, {_, {source, Source}}=Error} ->
             ?CONSOLE("Compiling ~s failed:\n", [Source]),
             maybe_report(Error),
             ?DEBUG("Worker compilation failed: ~p\n", [Error]),
@@ -203,8 +204,7 @@ compile_worker(QueuePid, Config, CompileFn) ->
                     QueuePid ! {skipped, Source},
                     compile_worker(QueuePid, Config, CompileFn);
                 Error ->
-                    QueuePid ! {fail, [{error, Error},
-                                       {source, Source}]},
+                    QueuePid ! {fail, {{error, Error}, {source, Source}}},
                     ok
             end;
 
@@ -225,7 +225,7 @@ format_warnings(Config, Source, Warnings, Opts) ->
              end,
     format_errors(Config, Source, Prefix, Warnings).
 
-maybe_report([{error, {error, _Es, _Ws}=ErrorsAndWarnings}, {source, _}]) ->
+maybe_report({{error, {error, _Es, _Ws}=ErrorsAndWarnings}, {source, _}}) ->
     maybe_report(ErrorsAndWarnings);
 maybe_report([{error, E}, {source, S}]) ->
     report(["unexpected error compiling " ++ S, io_lib:fwrite("~n~p~n", [E])]);
