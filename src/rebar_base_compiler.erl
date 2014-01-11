@@ -139,6 +139,7 @@ compile_each([Source | Rest], Config, CompileFn) ->
         skipped ->
             ?INFO("Skipped ~s\n", [Source]);
         Error ->
+            ?CONSOLE("Compiling ~s failed:\n", [Source]),
             maybe_report(Error),
             ?DEBUG("Compilation failed: ~p\n", [Error]),
             ?FAIL
@@ -158,8 +159,8 @@ compile_queue(Pids, Targets) ->
                     Worker ! {compile, Source},
                     compile_queue(Pids, Rest)
             end;
-
-        {fail, Error} ->
+        {fail, [_, {source, Source}]=Error} ->
+            ?CONSOLE("Compiling ~s failed:\n", [Source]),
             maybe_report(Error),
             ?DEBUG("Worker compilation failed: ~p\n", [Error]),
             ?FAIL;
