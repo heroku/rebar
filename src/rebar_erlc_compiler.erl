@@ -333,10 +333,10 @@ include_path(Source, Config) ->
 
 -spec needs_compile(file:filename(), file:filename(),
                     [string()]) -> boolean().
-needs_compile(Source, Target, Hrls) ->
+needs_compile(Source, Target, Parents) ->
     TargetLastMod = filelib:last_modified(Target),
     lists:any(fun(I) -> TargetLastMod < filelib:last_modified(I) end,
-              [Source] ++ Hrls).
+              [Source] ++ Parents).
 
 check_erlcinfo(_Config, #erlcinfo{vsn=?ERLCINFO_VSN}) ->
     ok;
@@ -379,18 +379,18 @@ update_erlcinfo(G, Source, IncludePath) ->
             modified
     end.
 
-modify_erlcinfo(G, Source, IncludePath) ->
+modify_erlcinfo(G, Source, IncludePaths) ->
     case file:open(Source, [read]) of
         {ok, Fd} ->
             Incls = parse_attrs(Fd, []),
-            AbsIncls = expand_file_names(Incls, IncludePath),
+            AbsIncls = expand_file_names(Incls, IncludePaths),
             %% TODO: why do we suppress exceptions here?
             catch file:close(Fd),
             LastUpdated = {date(), time()},
             digraph:add_vertex(G, Source, LastUpdated),
             lists:foreach(
               fun(Incl) ->
-                      update_erlcinfo(G, Incl, IncludePath),
+                      update_erlcinfo(G, Incl, IncludePaths),
                       digraph:add_edge(G, Source, Incl)
               end, AbsIncls);
         _Err ->
@@ -485,19 +485,19 @@ get_children(G, Source) ->
 -spec internal_erl_compile(rebar_config:config(), file:filename(),
                            file:filename(), list(),
                            digraph()) -> 'ok' | 'skipped'.
-internal_erl_compile(Config, Source, Outdir, ErlOpts, G) ->
+internal_erl_compile(Config, Source, OutDir, ErlOpts, G) ->
     %% Determine the target name and includes list by inspecting the source file
     Module = filename:basename(Source, ".erl"),
-    Hrsl = get_parents(G, Source),
-    ?DEBUG("~s depends on: ~p~n", [Source, Hrls]),
+    Parents = get_parents(G, Source),
+    ?DEBUG("~s depends on: ~p~n", [Source, Parents]),
 
     %% Construct the target filename
-    Target = filename:join([Outdir | string:tokens(Module, ".")]) ++ ".beam",
+    Target = filename:join([OutDir | string:tokens(Module, ".")]) ++ ".beam",
     ok = filelib:ensure_dir(Target),
 
     %% If the file needs compilation, based on last mod date of includes or
     %% the target
-    case needs_compile(Source, Target, Hrls) of
+    case needs_compile(Source, Target, Parents) of
         true ->
             Opts = [{outdir, filename:dirname(Target)}] ++
                 ErlOpts ++ [{i, "include"}, return],
