@@ -294,8 +294,10 @@ doterl_compile(Config, OutDir, MoreSources) ->
     {OtherFirstErls, OtherErls} =
         lists:partition(
           fun(F) ->
-                  case [Erl || Erl <- get_children(G, F),
-                               filename:extension(Erl) == ".erl"] of
+                  Children = get_children(G, F),
+                  ?DEBUG("Files dependent on ~s: ~p~n", [F, Children]),
+
+                  case erls(Children) of
                       [] ->
                           %% There are no files dependent on this file.
                           false;
@@ -306,7 +308,14 @@ doterl_compile(Config, OutDir, MoreSources) ->
                           true
                   end
           end, RestErls),
-    NewFirstErls = FirstErls ++ OtherFirstErls,
+    %% Dependencies of OtherFirstErls that must be compiled first.
+    %% Alternatively we could get and compile the parents in
+    %% internal_erl_compile when compiling an individual file.
+    OtherFirstErlsDeps = lists:flatmap(
+                           fun(Erl) -> erls(get_parents(G, Erl)) end,
+                           OtherFirstErls),
+    NewFirstErls = FirstErls ++ OtherFirstErlsDeps ++ OtherFirstErls,
+    ?DEBUG("Files to compile first: ~p~n", [NewFirstErls]),
     rebar_base_compiler:run(
       Config, NewFirstErls, OtherErls,
       fun(S, C) ->
@@ -479,7 +488,8 @@ get_children(G, Source) ->
 internal_erl_compile(Config, Source, Outdir, ErlOpts, G) ->
     %% Determine the target name and includes list by inspecting the source file
     Module = filename:basename(Source, ".erl"),
-    Hrls = get_parents(G, Source),
+    Hrsl = get_parents(G, Source),
+    ?DEBUG("~s depends on: ~p~n", [Source, Hrls]),
 
     %% Construct the target filename
     Target = filename:join([Outdir | string:tokens(Module, ".")]) ++ ".beam",
@@ -643,3 +653,9 @@ check_file(File) ->
         false -> ?ABORT("File ~p is missing, aborting\n", [File]);
         true -> File
     end.
+
+%%
+%% Return all .erl files from a list of files
+%%
+erls(Files) ->
+    [Erl || Erl <- Files, filename:extension(Erl) =:= ".erl"].
